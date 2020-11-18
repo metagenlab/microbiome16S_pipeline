@@ -31,72 +31,50 @@ rule Hash_master_files:
         '''
 
 
-rule Import_DB:
-    conda:
-        "../../envs/QIIME2-2020.02.yml"
+rule print_primers_to_files_DB:
+    output:
+        "InSilico/PCR/Primers.fasta"
+    params:
+        config["forward_primer"],
+        config["reverse_primer"]
+    shell:
+        '''
+        printf \
+        ">primer|F \n{params[0]} \n>primer|R \n{params[1]}" >> {output}
+        '''
+
+
+rule Extract_amplicon_DB:
     container:
-        singularity_envs["qiime2"] 
+        singularity_envs["simulatePCR"]
     input :
+        "InSilico/PCR/Primers.fasta",
         "{prefix}/master/original_seqs.fasta"
     output :
-        temp("{prefix}/QIIME/DB_seq.qza")
-    threads :
-        1
-    shell :
-         '''
-        qiime tools import \
-        --type 'FeatureData[Sequence]' \
-        --input-path {input} \
-        --output-path {output} 
-        '''
-
-
-rule Extract_amplicons:
-    conda:
-        "../../envs/QIIME2-2020.02.yml"
-    container:
-        singularity_envs["qiime2"] 
-    input:
-        "{prefix}/QIIME/DB_seq.qza"
-    output:
-        temp("{prefix}/QIIME/DB_amp_seq.qza")
+        "{prefix}/QIIME/dna-sequences.fasta"
     params:
-        primer_forward = config["forward_primer"],
-        primer_reverse = config["reverse_primer"],
-        length = config["length_max"]
-    log:
-        "{prefix}/logs/QIIME/DB_amp_seq.txt"
+        max_length = 500,
+        mismatch = 3,
+        threeprime = 1
     threads :
         1
     shell :
-         '''
-        qiime feature-classifier extract-reads \
-        --i-sequences {input} \
-        --p-f-primer {params[primer_forward]} \
-        --p-r-primer {params[primer_reverse]} \
-        --p-trunc-len {params[length]} \
-        --o-reads {output} \
-        --verbose 2> {log}
         '''
-
-
-rule Export_amplicons:
-    conda:
-        "../../envs/QIIME2-2020.02.yml"
-    container:
-        singularity_envs["qiime2"] 
-    input :
-        "{prefix}/QIIME/DB_amp_seq.qza"
-    output :
-        temp("{prefix}/QIIME/dna-sequences.fasta")
-    threads :
-        1
-    shell :
-         '''
-        qiime tools export \
-        --input-path {input} \
-        --output-path $(dirname {output}) 
-        '''
+        cd $(dirname {output[0]}) && \
+        simulate_PCR \
+            -primers ../../{input[0]} \
+            -db {input[1]} \
+            -maxlen {params.max_length} \
+            -mm {params.mismatch} \
+            -3prime {params.threeprime} \
+            -mux 0 \
+            -num_threads {threads} \
+            -max_target_seqs 1000000000 \
+            -word_size 4 \
+            -evalue 100000000 \
+            -genes 1 \
+            -extract_amp 1 
+          '''
 
 
 rule Dereplicate_amplicons:
