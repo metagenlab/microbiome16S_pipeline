@@ -51,19 +51,21 @@ rule Extract_amplicon_DB:
         "InSilico/PCR/Primers.fasta",
         "{prefix}/master/original_seqs.fasta"
     output :
-        "{prefix}/QIIME/dna-sequences.fasta"
+        "{prefix}/QIIME/Primers.fasta.pair.original_seqs.fasta.amplicons.fasta"
     params:
-        max_length = 500,
+        max_length = config["amplicon_max_length"],
+        min_length = config["amplicon_min_length"],
         mismatch = 3,
         threeprime = 1
     threads :
-        1
+        8
     shell :
         '''
         cd $(dirname {output[0]}) && \
         simulate_PCR \
             -primers ../../{input[0]} \
             -db {input[1]} \
+            -minlen {params.min_length} \
             -maxlen {params.max_length} \
             -mm {params.mismatch} \
             -3prime {params.threeprime} \
@@ -83,7 +85,7 @@ rule Dereplicate_amplicons:
     container:
         singularity_envs["qiime2"] 
     input :
-        "{prefix}/QIIME/dna-sequences.fasta"
+        "{prefix}/QIIME/Primers.fasta.pair.original_seqs.fasta.amplicons.fasta"
     output :
         fasta = "{prefix}/QIIME/DB_amp.fasta",
         uc = "{prefix}/QIIME/DB_amp.uc"
